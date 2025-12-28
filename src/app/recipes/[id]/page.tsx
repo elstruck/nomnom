@@ -22,8 +22,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Autocomplete,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -33,6 +31,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { Recipe } from '@/types';
+import EditRecipeDialog from '@/components/EditRecipeDialog';
+
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
 
 interface RecipeDetailPageProps {
   params: Promise<{ id: string }>;
@@ -45,9 +46,9 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingTags, setEditingTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const fetchRecipe = async () => {
@@ -63,7 +64,6 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
 
         const recipeData = await recipeRes.json();
         setRecipe(recipeData);
-        setEditingTags(recipeData.tags);
 
         if (tagsRes.ok) {
           setAvailableTags(await tagsRes.json());
@@ -78,22 +78,9 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
     fetchRecipe();
   }, [id]);
 
-  const handleUpdateTags = async () => {
-    try {
-      const response = await fetch(`/api/recipes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: editingTags }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update');
-
-      const updated = await response.json();
-      setRecipe(updated);
-      setEditDialogOpen(false);
-    } catch {
-      setError('Failed to update tags');
-    }
+  const handleRecipeUpdated = (updatedRecipe: Recipe) => {
+    setRecipe(updatedRecipe);
+    setImgError(false); // Reset image error in case cover image changed
   };
 
   const handleDelete = async () => {
@@ -144,15 +131,17 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
       </Button>
 
       <Card sx={{ mb: 3 }}>
-        {recipe.coverImage && (
+        {(recipe.coverImage || !imgError) && (
           <CardMedia
             component="img"
             height="300"
-            image={recipe.coverImage}
+            image={imgError ? PLACEHOLDER_IMAGE : (recipe.coverImage || PLACEHOLDER_IMAGE)}
             alt={recipe.title}
             sx={{ objectFit: 'cover' }}
-            onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-              e.currentTarget.style.display = 'none';
+            onError={() => {
+              if (!imgError) {
+                setImgError(true);
+              }
             }}
           />
         )}
@@ -162,7 +151,7 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
               {recipe.title}
             </Typography>
             <Box>
-              <IconButton onClick={() => setEditDialogOpen(true)} title="Edit tags">
+              <IconButton onClick={() => setEditDialogOpen(true)} title="Edit recipe">
                 <EditIcon />
               </IconButton>
               <IconButton onClick={() => setDeleteConfirmOpen(true)} color="error" title="Delete recipe">
@@ -299,37 +288,14 @@ export default function RecipeDetailPage({ params }: RecipeDetailPageProps) {
         </Card>
       </Box>
 
-      {/* Edit Tags Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Tags</DialogTitle>
-        <DialogContent>
-          <Autocomplete
-            multiple
-            freeSolo
-            options={availableTags}
-            value={editingTags}
-            onChange={(_, newValue) => setEditingTags(newValue)}
-            sx={{ mt: 1 }}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => {
-                const { key, ...tagProps } = getTagProps({ index });
-                return <Chip key={key} label={option} size="small" {...tagProps} />;
-              })
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Tags"
-                placeholder="Add tags..."
-              />
-            )}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleUpdateTags} variant="contained">Save</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Edit Recipe Dialog */}
+      <EditRecipeDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        onSuccess={handleRecipeUpdated}
+        recipe={recipe}
+        availableTags={availableTags}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>

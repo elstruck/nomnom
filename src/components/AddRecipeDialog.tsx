@@ -24,6 +24,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 
 interface AddRecipeDialogProps {
   open: boolean;
@@ -32,7 +33,7 @@ interface AddRecipeDialogProps {
   availableTags: string[];
 }
 
-type DialogMode = 'select' | 'url' | 'manual';
+type DialogMode = 'select' | 'url' | 'manual' | 'photo';
 
 interface ManualRecipeData {
   title: string;
@@ -65,6 +66,8 @@ export default function AddRecipeDialog({ open, onClose, onSuccess, availableTag
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [manualData, setManualData] = useState<ManualRecipeData>(initialManualData);
+  const [imageData, setImageData] = useState<string>('');
+  const [imagePreview, setImagePreview] = useState<string>('');
 
   const handleSubmitUrl = async () => {
     if (!url) {
@@ -153,12 +156,83 @@ export default function AddRecipeDialog({ open, onClose, onSuccess, availableTag
     }
   };
 
+  const handleSubmitPhoto = async () => {
+    if (!imageData) {
+      setError('Please upload or paste a recipe image');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/recipes/from-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageData, tags }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to process image');
+      }
+
+      resetAndClose();
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process image');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Image must be less than 10MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setImageData(dataUrl);
+        setImagePreview(dataUrl);
+        setError('');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent) => {
+    const items = event.clipboardData.items;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            setImageData(dataUrl);
+            setImagePreview(dataUrl);
+            setError('');
+          };
+          reader.readAsDataURL(file);
+        }
+        break;
+      }
+    }
+  };
+
   const resetAndClose = () => {
     setMode('select');
     setUrl('');
     setTags([]);
     setError('');
     setManualData(initialManualData);
+    setImageData('');
+    setImagePreview('');
     onClose();
   };
 
@@ -238,6 +312,22 @@ export default function AddRecipeDialog({ open, onClose, onSuccess, availableTag
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Import a recipe from a website
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardActionArea>
+            </Card>
+
+            <Card variant="outlined">
+              <CardActionArea onClick={() => setMode('photo')} sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <PhotoCameraIcon color="primary" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Scan from Photo
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Upload a recipe card or cookbook photo
                     </Typography>
                   </Box>
                 </Box>
@@ -329,6 +419,123 @@ export default function AddRecipeDialog({ open, onClose, onSuccess, availableTag
             startIcon={loading ? <CircularProgress size={20} /> : null}
           >
             {loading ? 'Adding...' : 'Add Recipe'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  // Photo mode
+  if (mode === 'photo') {
+    return (
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton onClick={handleBack} size="small" disabled={loading}>
+            <ArrowBackIcon />
+          </IconButton>
+          Add Recipe from Photo
+        </DialogTitle>
+        <DialogContent>
+          <Box
+            sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}
+            onPaste={handlePaste}
+          >
+            {error && <Alert severity="error">{error}</Alert>}
+
+            <Typography variant="body2" color="text.secondary">
+              Upload or paste a photo of a recipe card, cookbook page, or handwritten recipe.
+              Our AI will extract the recipe details.
+            </Typography>
+
+            {/* Image upload area */}
+            <Box
+              sx={{
+                border: '2px dashed',
+                borderColor: imagePreview ? 'primary.main' : 'grey.300',
+                borderRadius: 2,
+                p: 3,
+                textAlign: 'center',
+                cursor: 'pointer',
+                bgcolor: imagePreview ? 'grey.50' : 'background.paper',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  bgcolor: 'grey.50',
+                },
+              }}
+              onClick={() => document.getElementById('recipe-image-input')?.click()}
+            >
+              <input
+                type="file"
+                id="recipe-image-input"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ display: 'none' }}
+              />
+
+              {imagePreview ? (
+                <Box>
+                  <img
+                    src={imagePreview}
+                    alt="Recipe preview"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '300px',
+                      objectFit: 'contain',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                    Click to change image
+                  </Typography>
+                </Box>
+              ) : (
+                <Box>
+                  <PhotoCameraIcon sx={{ fontSize: 48, color: 'grey.400', mb: 1 }} />
+                  <Typography variant="body1" gutterBottom>
+                    Click to upload or paste an image
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Supports JPG, PNG, WebP (max 10MB)
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+
+            <Autocomplete
+              multiple
+              freeSolo
+              options={availableTags}
+              value={tags}
+              onChange={(_, newValue) => setTags(newValue)}
+              disabled={loading}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => {
+                  const { key, ...tagProps } = getTagProps({ index });
+                  return <Chip key={key} label={option} size="small" {...tagProps} />;
+                })
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Tags (optional)"
+                  placeholder="Add tags..."
+                  helperText="Press Enter to add custom tags"
+                />
+              )}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmitPhoto}
+            variant="contained"
+            disabled={loading || !imageData}
+            startIcon={loading ? <CircularProgress size={20} /> : null}
+          >
+            {loading ? 'Processing...' : 'Extract Recipe'}
           </Button>
         </DialogActions>
       </Dialog>
