@@ -56,9 +56,8 @@ Format your response as a JSON array with objects containing:
 Return ONLY the JSON array, no other text.`;
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano-2025-08-07',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.7,
   });
 
   const content = response.choices[0]?.message?.content || '[]';
@@ -108,9 +107,8 @@ Format your response as a JSON array with objects containing:
 Return ONLY the JSON array, no other text.`;
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano-2025-08-07',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3,
   });
 
   const content = response.choices[0]?.message?.content || '[]';
@@ -134,6 +132,69 @@ Return ONLY the JSON array, no other text.`;
   }
 }
 
+export async function extractRecipeFromUrl(url: string): Promise<{
+  ingredients: string[];
+  instructions: string[];
+  prepTime?: string;
+  cookTime?: string;
+  servings?: string;
+} | null> {
+  const openai = getOpenAIClient();
+
+  const prompt = `Visit this recipe URL and extract the recipe data:
+
+URL: ${url}
+
+Extract and return a JSON object with:
+{
+  "ingredients": ["ingredient 1 with quantity", "ingredient 2 with quantity", ...],
+  "instructions": ["Step 1 actual cooking instruction", "Step 2 actual cooking instruction", ...],
+  "prepTime": "X minutes" or null,
+  "cookTime": "X minutes" or null,
+  "servings": "X servings" or null
+}
+
+IMPORTANT:
+- Extract actual ingredient quantities (e.g., "1 lb asparagus", "12 slices bacon")
+- Extract actual cooking steps, NOT article section headings
+- If ingredients are in prose text, extract them
+- Return the JSON object
+
+Return ONLY the JSON object.`;
+
+  try {
+    const response = await openai.responses.create({
+      model: 'gpt-5-nano-2025-08-07',
+      tools: [{ type: 'web_search' }],
+      input: prompt,
+    });
+
+    const content = response.output_text || '';
+
+    // Handle null response
+    if (content.trim().toLowerCase() === 'null') {
+      return null;
+    }
+
+    // Extract JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+        instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
+        prepTime: parsed.prepTime,
+        cookTime: parsed.cookTime,
+        servings: parsed.servings,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('AI recipe extraction failed:', error);
+    return null;
+  }
+}
+
 export async function suggestTags(recipe: { title: string; ingredients: string[]; instructions: string[] }): Promise<string[]> {
   const openai = getOpenAIClient();
 
@@ -149,9 +210,8 @@ breakfast, lunch, dinner, dessert, appetizer, vegetarian, vegan, gluten-free, da
 Return ONLY a JSON array of strings, no other text.`;
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano-2025-08-07',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3,
   });
 
   const content = response.choices[0]?.message?.content || '[]';

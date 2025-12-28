@@ -128,7 +128,7 @@ export default function Home() {
           onClick={() => setAddDialogOpen(true)}
           sx={{ px: 4, py: 1.5 }}
         >
-          Add Recipe from URL
+          Add Recipe
         </Button>
       </Box>
 

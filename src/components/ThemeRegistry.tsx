@@ -2,7 +2,7 @@
 
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 
 const theme = createTheme({
   palette: {
@@ -63,6 +63,17 @@ const theme = createTheme({
 });
 
 export default function ThemeRegistry({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent hydration mismatch by not rendering children until client-side
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

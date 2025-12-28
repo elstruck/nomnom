@@ -13,12 +13,14 @@ const defaultData: Database = {
 let db: Low<Database> | null = null;
 
 export async function getDb(): Promise<Low<Database>> {
-  if (db) return db;
-
   const dbPath = path.join(process.cwd(), 'data', 'db.json');
-  const adapter = new JSONFile<Database>(dbPath);
-  db = new Low(adapter, defaultData);
 
+  if (!db) {
+    const adapter = new JSONFile<Database>(dbPath);
+    db = new Low(adapter, defaultData);
+  }
+
+  // Always re-read from disk to get latest data
   await db.read();
 
   if (!db.data) {

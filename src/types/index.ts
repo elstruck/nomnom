@@ -12,6 +12,7 @@ export interface Recipe {
   cookTime?: string;
   totalTime?: string;
   servings?: string;
+  isDraft?: boolean;
   createdAt: string;
   updatedAt: string;
 }

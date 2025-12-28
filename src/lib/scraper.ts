@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { Recipe } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { extractRecipeFromUrl } from './ai';
 
 interface ScrapedRecipe {
   title: string;
@@ -31,12 +32,44 @@ export async function scrapeRecipe(url: string): Promise<ScrapedRecipe> {
 
   // Try to find JSON-LD structured data first (most reliable)
   const jsonLdData = extractJsonLd($);
-  if (jsonLdData) {
+  if (jsonLdData && jsonLdData.ingredients.length > 0) {
     return jsonLdData;
   }
 
-  // Fall back to HTML scraping
-  return scrapeFromHtml($, url);
+  // Try HTML scraping
+  const htmlData = scrapeFromHtml($, url);
+
+  console.log('HTML scraping result:', {
+    ingredients: htmlData.ingredients.length,
+    instructions: htmlData.instructions.length,
+  });
+
+  // If HTML scraping found ingredients/instructions, use that
+  if (htmlData.ingredients.length > 0 && htmlData.instructions.length > 0) {
+    return htmlData;
+  }
+
+  // Fall back to AI extraction for sites without structured data
+  console.log('Falling back to AI extraction...');
+  try {
+    const aiData = await extractRecipeFromUrl(url);
+    console.log('AI extraction result:', aiData);
+    if (aiData && aiData.ingredients.length > 0) {
+      return {
+        ...htmlData,
+        ingredients: aiData.ingredients,
+        instructions: aiData.instructions,
+        prepTime: aiData.prepTime || htmlData.prepTime,
+        cookTime: aiData.cookTime || htmlData.cookTime,
+        servings: aiData.servings || htmlData.servings,
+      };
+    }
+  } catch (error) {
+    console.error('AI extraction failed, using HTML fallback:', error);
+  }
+
+  // Return whatever HTML scraping found (may be incomplete)
+  return htmlData;
 }
 
 function extractJsonLd($: cheerio.CheerioAPI): ScrapedRecipe | null {
