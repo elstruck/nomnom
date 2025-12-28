@@ -195,6 +195,86 @@ Return ONLY the JSON object.`;
   }
 }
 
+export async function extractRecipeFromImage(imageBase64: string): Promise<{
+  title: string;
+  description?: string;
+  ingredients: string[];
+  instructions: string[];
+  prepTime?: string;
+  cookTime?: string;
+  servings?: string;
+} | null> {
+  const openai = getOpenAIClient();
+
+  const prompt = `Analyze this image of a recipe card or cookbook page and extract the recipe information.
+
+Return a JSON object with:
+{
+  "title": "Recipe name",
+  "description": "Brief description if visible",
+  "ingredients": ["ingredient 1 with quantity", "ingredient 2 with quantity", ...],
+  "instructions": ["Step 1", "Step 2", ...],
+  "prepTime": "X minutes" or null,
+  "cookTime": "X minutes" or null,
+  "servings": "X servings" or null
+}
+
+IMPORTANT:
+- Extract actual ingredient quantities if visible
+- Number the instruction steps if not already numbered
+- If text is partially obscured, do your best to interpret it
+- If this is not a recipe image, return null
+
+Return ONLY the JSON object, no other text.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 2000,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+
+    // Handle null response
+    if (content.trim().toLowerCase() === 'null') {
+      return null;
+    }
+
+    // Extract JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        title: parsed.title || 'Untitled Recipe',
+        description: parsed.description,
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+        instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
+        prepTime: parsed.prepTime,
+        cookTime: parsed.cookTime,
+        servings: parsed.servings,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('AI image extraction failed:', error);
+    return null;
+  }
+}
+
 export async function suggestTags(recipe: { title: string; ingredients: string[]; instructions: string[] }): Promise<string[]> {
   const openai = getOpenAIClient();
 

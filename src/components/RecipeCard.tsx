@@ -17,6 +17,8 @@ import RestaurantIcon from '@mui/icons-material/Restaurant';
 import { useState } from 'react';
 import { Recipe } from '@/types';
 
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
+
 interface RecipeCardProps {
   recipe: Recipe;
   onClick?: () => void;
@@ -26,6 +28,7 @@ interface RecipeCardProps {
 
 export default function RecipeCard({ recipe, onClick, onDelete, onLogMeal }: RecipeCardProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [imgError, setImgError] = useState(false);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -64,11 +67,13 @@ export default function RecipeCard({ recipe, onClick, onDelete, onLogMeal }: Rec
       <CardMedia
         component="img"
         height="180"
-        image={recipe.coverImage || '/placeholder-recipe.jpg'}
+        image={imgError ? PLACEHOLDER_IMAGE : (recipe.coverImage || PLACEHOLDER_IMAGE)}
         alt={recipe.title}
         sx={{ objectFit: 'cover' }}
-        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-          e.currentTarget.src = 'https://via.placeholder.com/400x300?text=No+Image';
+        onError={() => {
+          if (!imgError) {
+            setImgError(true);
+          }
         }}
       />
       <CardContent sx={{ flexGrow: 1 }}>
